@@ -3,7 +3,20 @@ var passport = require('passport')
   , config = core.getConfig().auth
   , logger = core.getLogger('auth');
 
-console.log(config);
+// Passport session setup.
+//   To support persistent login sessions, Passport needs to be able to
+//   serialize users into and deserialize users out of the session.  Typically,
+//   this will be as simple as storing the user ID when serializing, and finding
+//   the user by ID when deserializing.  However, since this example does not
+//   have a database of user records, the complete profile is serialized
+//   and deserialized.
+passport.serializeUser(function(user, done) {
+  done(null, user);
+});
+
+passport.deserializeUser(function(obj, done) {
+  done(null, obj);
+});
 
 function addFacebookAuth(app) {
   var FacebookStrategy = require('passport-facebook').Strategy;
@@ -12,10 +25,18 @@ function addFacebookAuth(app) {
     new FacebookStrategy({
         clientID: config.facebook.clientID,
         clientSecret: config.facebook.clientSecret,
-        callbackURL: config.facebook.callbackURL
+        callbackURL: config.facebook.callbackURL,
+        passReqToCallback: true
       },
-      function(accessToken, refreshToken, profile, done) {
-        // TODO: do something with the data.
+      function(req, accessToken, refreshToken, profile, done) {
+        if (!req.user) {
+          // Not logged-in. Authenticate based on Facebook account.
+          return done(null, profile);
+        } else {
+          // Logged in. Associate Twitter account with user.  Preserve the login
+          // state by supplying the existing user after association.
+          return done(null, req.user);
+        }
       })
   );
 
@@ -31,7 +52,7 @@ function addFacebookAuth(app) {
   app.get('/auth/facebook/callback',
     passport.authenticate(
       'facebook',
-      { successRedirect: '/', failureRedirect: '/login' }
+      { successRedirect: '/', failureRedirect: '/auth' }
     )
   );
 }
@@ -42,10 +63,18 @@ function addTwitterAuth(app) {
   passport.use(new TwitterStrategy({
       consumerKey: config.twitter.consumerKey,
       consumerSecret: config.twitter.consumerSecret,
-      callbackURL: config.twitter.callbackURL
+      callbackURL: config.twitter.callbackURL,
+      passReqToCallback: true
     },
-    function(token, tokenSecret, profile, done) {
-      // TODO: do something with the data.
+    function(req, token, tokenSecret, profile, done) {
+      if (!req.user) {
+        // Not logged-in. Authenticate based on Twitter account.
+        return done(null, profile);
+      } else {
+        // Logged in. Associate Twitter account with user.  Preserve the login
+        // state by supplying the existing user after association.
+        return done(null, req.user);
+      }
     })
   );
 
@@ -61,7 +90,7 @@ function addTwitterAuth(app) {
   app.get('/auth/twitter/callback',
     passport.authenticate(
       'twitter',
-      { successRedirect: '/', failureRedirect: '/login' }
+      { successRedirect: '/', failureRedirect: '/auth' }
     )
   );
 }
@@ -72,9 +101,17 @@ function addGoogleAuth(app) {
   passport.use(new GoogleStrategy({
       returnURL: config.google.returnURL,
       realm: config.google.realm,
+      passReqToCallback: true
     },
-    function(identifier, profile, done) {
-      // TODO: do something with the data.
+    function(req, identifier, profile, done) {
+      if (!req.user) {
+        // Not logged-in. Authenticate based on Google account.
+        return done(null, profile);
+      } else {
+        // Logged in. Associate Twitter account with user.  Preserve the login
+        // state by supplying the existing user after association.
+        return done(null, req.user);
+      }
     })
   );
 
@@ -86,10 +123,10 @@ function addGoogleAuth(app) {
   // Google will redirect the user to this URL after authentication.  Finish
   // the process by verifying the assertion.  If valid, the user will be
   // logged in.  Otherwise, authentication has failed.
-  app.get('/auth/google/return',
+  app.get('/auth/google/callback',
     passport.authenticate(
       'google',
-      { successRedirect: '/', failureRedirect: '/login' }
+      { successRedirect: '/', failureRedirect: '/auth' }
     )
   );
 }
@@ -100,15 +137,45 @@ function addGithubAuth(app) {
   passport.use(new GithubStrategy({
       clientID: config.github.clientID,
       clientSecret: config.github.clientSecret,
-      callbackURL: config.github.callbackURL
+      callbackURL: config.github.callbackURL,
+      passReqToCallback: true
     },
-    function(accessToken, refreshToken, profile, done) {
-      // TODO: do something with the data.
+    function(req, accessToken, refreshToken, profile, done) {
+      if (!req.user) {
+        // Not logged-in. Authenticate based on Github account.
+        return done(null, profile);
+      } else {
+        // Logged in. Associate Twitter account with user.  Preserve the login
+        // state by supplying the existing user after association.
+        return done(null, req.user);
+      }
     })
+  );
+
+  // Redirect the user to Github for authentication.  When complete, Google
+  // will redirect the user back to the application at
+  //     /auth/github/return
+  app.get('/auth/github', passport.authenticate('github'));
+
+  // Github will redirect the user to this URL after authentication.  Finish
+  // the process by verifying the assertion.  If valid, the user will be
+  // logged in.  Otherwise, authentication has failed.
+  app.get('/auth/github/callback',
+    passport.authenticate(
+      'github',
+      { successRedirect: '/', failureRedirect: '/auth' }
+    )
   );
 }
 
+function addAuthPage(app) {
+  app.get('/auth', function(req, res){
+    res.render('auth', { title: 'Authentication Settings' });
+  });
+}
+
 function addAll(app) {
+  addAuthPage(app);
   addFacebookAuth(app);
   addGithubAuth(app);
   addGoogleAuth(app);
@@ -117,6 +184,7 @@ function addAll(app) {
 
 module.exports = {
   'addAll': addAll,
+  'addAuthPage': addAuthPage,
   'addFacebookAuth' : addFacebookAuth,
   'addGithubAuth' : addGithubAuth,
   'addGoogleAuth' : addGoogleAuth,

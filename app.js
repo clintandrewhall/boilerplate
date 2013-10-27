@@ -4,8 +4,9 @@ var core = require('./core')()
   , http = require('http')
   , nib = require('nib')
   , path = require('path')
-  , routes = require('./routes')
   , stylus = require('stylus')
+  , passport = require('passport')
+  , routes = require('./routes')
   , user = require('./routes/user')
   , auth = require('./routes/auth');
 
@@ -25,19 +26,21 @@ app.set('port', (process.env.PORT || 3000));
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 
-app.use(
-  express.favicon(),
-  express.bodyParser(),
-  express.methodOverride(),
-  express.cookieParser('m0v3f@st'),
-  express.session(),
-  app.router,
-  stylus.middleware({
+app.configure(function() {
+  app.use(express.favicon());
+  app.use(express.bodyParser());
+  app.use(express.methodOverride());
+  app.use(express.cookieParser('m0v3f@st'));
+  app.use(express.session());
+  app.use(passport.initialize());
+  app.use(passport.session());
+  app.use(app.router);
+  app.use(stylus.middleware({
     'src': public_dir,
     'compile': compile
-  }),
-  express.static(public_dir)
-);
+  }));
+  app.use(express.static(public_dir));
+});
 
 // development only
 if ('development' == app.get('env')) {
@@ -47,6 +50,7 @@ if ('development' == app.get('env')) {
 //auth.addAll(app);
 app.use('/', routes.index);
 app.use('/users', user.list);
+auth.addAll(app);
 
 http.createServer(app).listen(app.get('port'), function(){
   logger.info('Express server listening on port ' + app.get('port'));
